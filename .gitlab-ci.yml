@@ -1,0 +1,85 @@
+stages:
+  - build
+  - push
+  - deploy
+
+variables:
+  AWS_REGION: "eu-west-2"
+  IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
+  IMAGE_URI: "$ECR_REPO:$CI_COMMIT_SHORT_SHA"
+
+# -----------------------------------
+# 🔹 LOGIN TO ECR
+# -----------------------------------
+.before_aws_login: &aws_login
+  before_script:
+    - apt-get update && apt-get install -y awscli
+    - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+    - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+    - aws configure set region $AWS_REGION
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+
+# -----------------------------------
+# 🔹 BUILD DOCKER IMAGE
+# -----------------------------------
+build:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:dind
+  script:
+    - docker build -t $IMAGE_URI .
+
+# -----------------------------------
+# 🔹 PUSH TO ECR
+# -----------------------------------
+push:
+  stage: push
+  image: docker:24.0.5
+  services:
+    - docker:dind
+  <<: *aws_login
+  script:
+    - docker build -t $IMAGE_URI .
+    - docker tag $IMAGE_URI $ECR_REPO:latest
+    - docker push $IMAGE_URI
+    - docker push $ECR_REPO:latest
+
+# -----------------------------------
+# 🔹 DEPLOY TEMPLATE
+# -----------------------------------
+.deploy_template: &deploy_template
+  stage: deploy
+  image: amazon/aws-cli:2.15.0
+  script:
+    - aws ecs update-service \
+        --cluster $CLUSTER_NAME \
+        --service ${ENV}-service \
+        --force-new-deployment
+  when: manual
+  only:
+    - main
+
+# -----------------------------------
+# 🔹 DEV
+# -----------------------------------
+deploy_dev:
+  <<: *deploy_template
+  variables:
+    ENV: "dev"
+
+# -----------------------------------
+# 🔹 STAGE
+# -----------------------------------
+deploy_stage:
+  <<: *deploy_template
+  variables:
+    ENV: "stage"
+
+# -----------------------------------
+# 🔹 PROD
+# -----------------------------------
+deploy_prod:
+  <<: *deploy_template
+  variables:
+    ENV: "prod"
