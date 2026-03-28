@@ -5,19 +5,23 @@ stages:
 
 variables:
   AWS_REGION: "eu-west-2"
+  IMAGE_NAME: "test-app"
   IMAGE_TAG: "$CI_COMMIT_SHORT_SHA"
-  IMAGE_URI: "$ECR_REPO:$CI_COMMIT_SHORT_SHA"
+  VERSION_TAG: "wowcher-v1.0.0"
+  ECR_REGISTRY: "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+  IMAGE_URI: "$ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG"
 
 # -----------------------------------
-# 🔹 LOGIN TO ECR
+# 🔹 LOGIN TO AWS & ECR
 # -----------------------------------
 .before_aws_login: &aws_login
   before_script:
-    - apt-get update && apt-get install -y awscli
+    - apk add --no-cache python3 py3-pip
+    - pip3 install awscli
     - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
     - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
     - aws configure set region $AWS_REGION
-    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REPO
+    - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
 
 # -----------------------------------
 # 🔹 BUILD DOCKER IMAGE
@@ -28,7 +32,7 @@ build:
   services:
     - docker:dind
   script:
-    - docker build -t $IMAGE_URI .
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
 
 # -----------------------------------
 # 🔹 PUSH TO ECR
@@ -40,46 +44,14 @@ push:
     - docker:dind
   <<: *aws_login
   script:
-    - docker build -t $IMAGE_URI .
-    - docker tag $IMAGE_URI $ECR_REPO:latest
+    # Docker Build
+    - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+    # Tag image for ECR
+    - docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_URI
+
+    # Push commit-based image
     - docker push $IMAGE_URI
-    - docker push $ECR_REPO:latest
 
-# -----------------------------------
-# 🔹 DEPLOY TEMPLATE
-# -----------------------------------
-.deploy_template: &deploy_template
-  stage: deploy
-  image: amazon/aws-cli:2.15.0
-  script:
-    - aws ecs update-service \
-        --cluster $CLUSTER_NAME \
-        --service ${ENV}-service \
-        --force-new-deployment
-  when: manual
-  only:
-    - main
-
-# -----------------------------------
-# 🔹 DEV
-# -----------------------------------
-deploy_dev:
-  <<: *deploy_template
-  variables:
-    ENV: "dev"
-
-# -----------------------------------
-# 🔹 STAGE
-# -----------------------------------
-deploy_stage:
-  <<: *deploy_template
-  variables:
-    ENV: "stage"
-
-# -----------------------------------
-# 🔹 PROD
-# -----------------------------------
-deploy_prod:
-  <<: *deploy_template
-  variables:
-    ENV: "prod"
+    # Tag and push version tag
+    - docker tag $IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$IMAGE_NAME:$VERSION_TAG
+    - docker push $ECR_REGISTRY/$IMAGE_NAME:$VERSION_TAG
