@@ -2,7 +2,7 @@ variable "region" {
   default = "eu-west-2"
 }
 
-variable "project_name" {
+variable "app_name" {
   default = "test-app"
 }
 
