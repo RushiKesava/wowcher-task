@@ -1,0 +1,83 @@
+stages:
+  - bootstrap
+  - validate
+  - plan
+  - apply
+
+variables:
+  AWS_REGION: "eu-west-2"
+  TF_IN_AUTOMATION: "true"
+
+# -----------------------------------
+# 🔹 BOOTSTRAP (RUN ONLY ONCE)
+# -----------------------------------
+bootstrap:
+  stage: bootstrap
+  image: hashicorp/terraform:1.6.6
+  script:
+    - cd infra-repo/bootstrap
+    - terraform init -input=false
+    - terraform apply -auto-approve
+  when: manual
+  only:
+    - main
+
+# -----------------------------------
+# 🔹 VALIDATE INFRA
+# -----------------------------------
+validate:
+  stage: validate
+  image: hashicorp/terraform:1.6.6
+  script:
+    - cd infra-repo
+    - terraform init -input=false \
+        -backend-config="bucket=wowcher-terraform-state-bucket" \
+        -backend-config="key=ecs/common/terraform.tfstate" \
+        -backend-config="region=${AWS_REGION}" \
+        -backend-config="dynamodb_table=terraform-lock-table"
+    - terraform validate
+
+# -----------------------------------
+# 🔹 PLAN INFRA
+# -----------------------------------
+plan:
+  stage: plan
+  image: hashicorp/terraform:1.6.6
+  script:
+    - cd infra-repo
+    - terraform init -input=false \
+        -backend-config="bucket=wowcher-terraform-state-bucket" \
+        -backend-config="key=ecs/common/terraform.tfstate" \
+        -backend-config="region=${AWS_REGION}" \
+        -backend-config="dynamodb_table=terraform-lock-table"
+
+    - terraform plan \
+        -out=tfplan
+
+  artifacts:
+    paths:
+      - infra-repo/tfplan
+  only:
+    - main
+
+# -----------------------------------
+# 🔹 APPLY INFRA
+# -----------------------------------
+apply:
+  stage: apply
+  image: hashicorp/terraform:1.6.6
+  script:
+    - cd infra-repo
+    - terraform init -input=false \
+        -backend-config="bucket=wowcher-terraform-state-bucket" \
+        -backend-config="key=ecs/common/terraform.tfstate" \
+        -backend-config="region=${AWS_REGION}" \
+        -backend-config="dynamodb_table=terraform-lock-table"
+
+    - terraform apply -auto-approve tfplan
+
+  dependencies:
+    - plan
+  when: manual
+  only:
+    - main
