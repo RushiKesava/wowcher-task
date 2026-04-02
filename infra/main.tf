@@ -55,17 +55,17 @@ module "alb" {
 # -----------------------------
 # ECS Service
 # -----------------------------
-module "ecs_service" {
-  source = "./modules/ecs-service"
+# module "ecs_service" {
+#  source = "./modules/ecs-service"
 
-  project              = var.app_name
-  cluster_id           = module.ecs_cluster.cluster_id
-  cluster_name         = "${var.app_name}-cluster"
-  repository_url       = module.ecr.repository_url
-  execution_role_arn   = module.iam.execution_role_arn
-  task_role_arn        = module.iam.task_role_arn
-  private_subnets      = module.network.private_subnets
-  ecs_sg_id            = module.alb.ecs_sg
-  target_group_arn     = module.alb.target_group_arn
-  region               = var.region
-}
+#  project              = var.app_name
+#  cluster_id           = module.ecs_cluster.cluster_id
+#  cluster_name         = "${var.app_name}-cluster"
+#  repository_url       = module.ecr.repository_url
+#  execution_role_arn   = module.iam.execution_role_arn
+#  task_role_arn        = module.iam.task_role_arn
+#  private_subnets      = module.network.private_subnets
+#  ecs_sg_id            = module.alb.ecs_sg
+#  target_group_arn     = module.alb.target_group_arn
+#  region               = var.region
+#}
